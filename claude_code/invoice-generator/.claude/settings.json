@@ -1,0 +1,17 @@
+{
+  "project": {
+    "name": "Invoice Generator MicroSaaS",
+    "description": "Full-stack invoice generator with React + FastAPI"
+  },
+  "structure": {
+    "frontend": "frontend/",
+    "backend": "backend/",
+    "docker": "docker/"
+  },
+  "commands": {
+    "dev:backend": "cd backend && uvicorn app.main:app --reload",
+    "dev:frontend": "cd frontend && npm run dev",
+    "docker:dev": "cd docker && docker-compose -f docker-compose.dev.yml up --build",
+    "docker:prod": "cd docker && docker-compose up --build"
+  }
+}
