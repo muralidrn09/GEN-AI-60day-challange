@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: invoice_db_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-invoice_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
+      POSTGRES_DB: ${POSTGRES_DB:-invoice_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - invoice_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-invoice_user} -d ${POSTGRES_DB:-invoice_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend.prod
+    container_name: invoice_backend_prod
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-invoice_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-invoice_db}
+      SECRET_KEY: ${SECRET_KEY:?Secret key required}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_SERVER: ${MAIL_SERVER:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - invoice_network
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: invoice_frontend_prod
+    restart: always
+    networks:
+      - invoice_network
+    expose:
+      - "80"
+
+  nginx:
+    image: nginx:alpine
+    container_name: invoice_nginx_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - invoice_network
+
+  certbot:
+    image: certbot/certbot
+    container_name: invoice_certbot
+    volumes:
+      - ./nginx/ssl:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  invoice_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  certbot_webroot:
